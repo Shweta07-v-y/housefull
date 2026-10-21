@@ -8,9 +8,11 @@ import com.ccm.housefull.seat.Seat;
 import com.ccm.housefull.seat.SeatRepository;
 import com.ccm.housefull.seat.SeatStatus;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -19,7 +21,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-// Handles seat holds and booking rules for the Housefull application.
+// Handles booking creation, seat holds, expiry and simulated payments.
 @Service
 public class BookingService {
 
@@ -27,7 +29,7 @@ public class BookingService {
     private final EventRepository eventRepository;
     private final SeatRepository seatRepository;
 
-    // Spring injects the repositories that provide database access.
+    // Spring injects the repositories used to access MySQL.
     public BookingService(
             BookingRepository bookingRepository,
             EventRepository eventRepository,
@@ -38,14 +40,14 @@ public class BookingService {
         this.seatRepository = seatRepository;
     }
 
-    // Creates a temporary seat hold in one database transaction.
+    // Creates a temporary hold for the selected seats.
+    // The transaction keeps booking and seat changes together.
     @Transactional
     public HoldSeatsResponse holdSeats(HoldSeatsRequest request) {
 
-        // Capture the current time to calculate the hold deadline.
         LocalDateTime now = LocalDateTime.now();
 
-        // Release expired holds before checking the requested seats.
+        // Release any expired holds before processing this request.
         expireOldBookings(now);
 
         // Check that the requested event exists.
@@ -55,7 +57,7 @@ public class BookingService {
 
         List<Long> requestedIds = request.getSeatIds();
 
-        // Prevent a request from including the same seat ID more than once.
+        // Prevent the same seat from being requested more than once.
         Set<Long> uniqueIds = new HashSet<>(requestedIds);
 
         if (uniqueIds.size() != requestedIds.size()) {
@@ -63,17 +65,17 @@ public class BookingService {
                     "Duplicate seat IDs are not allowed");
         }
 
-        // Lock the requested seat rows while checking their availability.
+        // Lock the requested seat rows while checking availability.
         List<Seat> seats =
                 seatRepository.findSelectedSeatsForUpdate(requestedIds);
 
-        // Make sure every requested seat ID exists.
+        // Ensure every requested seat ID exists.
         if (seats.size() != requestedIds.size()) {
             throw new IllegalArgumentException(
                     "One or more selected seats do not exist");
         }
 
-        // Ensure that all selected seats belong to the requested event.
+        // Ensure the selected seats belong to the requested event.
         for (Seat seat : seats) {
             if (!seat.getEvent().getId().equals(event.getId())) {
                 throw new IllegalArgumentException(
@@ -81,31 +83,32 @@ public class BookingService {
             }
         }
 
-        // Only AVAILABLE seats can be held for a new booking.
+        // Reject seats that are already held or booked.
         for (Seat seat : seats) {
             if (seat.getStatus() != SeatStatus.AVAILABLE) {
-                throw new IllegalArgumentException(
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
                         "Seat " + seat.getRowLabel()
-                        + seat.getSeatNumber()
-                        + " is not available");
+                                + seat.getSeatNumber()
+                                + " is not available");
             }
         }
 
-        // The server sets the five-minute deadline; the client cannot choose it.
+        // The backend determines the five-minute expiry deadline.
         LocalDateTime expiryTime = now.plusMinutes(5);
 
-        // Calculate the price from database seat prices, not client input.
+        // Calculate the price from database values, not client input.
         BigDecimal totalAmount = seats.stream()
                 .map(Seat::getPrice)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Mark the selected seats as temporarily held.
+        // Temporarily hold every selected seat.
         for (Seat seat : seats) {
             seat.setStatus(SeatStatus.HELD);
             seat.setHoldExpiresAt(expiryTime);
         }
 
-        // Create a booking containing the event, selected seats, price and deadline.
+        // Create a booking with its event, seats, total and expiry time.
         Booking booking = new Booking(
                 event,
                 new HashSet<>(seats),
@@ -113,15 +116,15 @@ public class BookingService {
                 expiryTime
         );
 
-        // Save the booking. JPA also tracks the seat changes in this transaction.
+        // Save the booking; JPA tracks the seat updates in this transaction.
         Booking savedBooking = bookingRepository.save(booking);
 
-        // Convert database entities into DTOs for a safe API response.
+        // Convert entities into response DTOs to avoid exposing JPA entities.
         List<SeatResponse> seatResponses = seats.stream()
                 .map(SeatResponse::from)
                 .collect(Collectors.toList());
 
-        // Return the booking reference, status, price, deadline and selected seats.
+        // Return the booking reference and details needed by the customer.
         return new HoldSeatsResponse(
                 savedBooking.getBookingCode(),
                 savedBooking.getStatus(),
@@ -131,21 +134,106 @@ public class BookingService {
         );
     }
 
-    // Automatically checks for expired holds every 10 seconds.
-    // This works even when no customer sends another booking request.
+    // Processes the fake Pay/Fail action for a booking.
+    @Transactional
+    public PaymentResponse processPayment(
+            String bookingCode,
+            PaymentRequest request) {
+
+        // Find the booking using the code returned when seats were held.
+        Booking booking = bookingRepository.findByBookingCode(bookingCode)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("Booking not found"));
+
+        LocalDateTime now = LocalDateTime.now();
+
+        // Only bookings that are still awaiting payment can be processed.
+        if (booking.getStatus() != BookingStatus.HELD) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "This booking is no longer awaiting payment");
+        }
+
+        // Reject payment if the five-minute hold has expired.
+        if (booking.getHoldExpiresAt() == null
+                || !booking.getHoldExpiresAt().isAfter(now)) {
+
+            // Process expiry now rather than relying on the scheduled task.
+            expireOldBookings(now);
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "The seat hold has expired. Please book again.");
+        }
+
+        // Handle simulated successful payment.
+        if (Boolean.TRUE.equals(request.getSuccess())) {
+
+            // Verify that all seats are still held and their deadlines are valid.
+            for (Seat seat : booking.getSeats()) {
+                if (seat.getStatus() != SeatStatus.HELD
+                        || seat.getHoldExpiresAt() == null
+                        || !seat.getHoldExpiresAt().isAfter(now)
+                        || !seat.getHoldExpiresAt().equals(
+                                booking.getHoldExpiresAt())) {
+
+                    throw new ResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "A seat hold is no longer valid. Please book again.");
+                }
+            }
+
+            // Payment succeeded: confirm the booking and sell its seats.
+            for (Seat seat : booking.getSeats()) {
+                seat.setStatus(SeatStatus.BOOKED);
+
+                // Clear the temporary deadline after confirmation.
+                seat.setHoldExpiresAt(null);
+            }
+
+            booking.setStatus(BookingStatus.CONFIRMED);
+
+            return new PaymentResponse(
+                    booking.getBookingCode(),
+                    booking.getStatus(),
+                    booking.getTotalAmount(),
+                    "Payment successful. Your booking is confirmed."
+            );
+        }
+
+        // Handle simulated failed payment by releasing this booking's seats.
+        for (Seat seat : booking.getSeats()) {
+            if (seat.getStatus() == SeatStatus.HELD
+                    && seat.getHoldExpiresAt() != null
+                    && seat.getHoldExpiresAt().equals(
+                            booking.getHoldExpiresAt())) {
+
+                seat.setStatus(SeatStatus.AVAILABLE);
+                seat.setHoldExpiresAt(null);
+            }
+        }
+
+        // Record the failed payment so it cannot be processed a second time.
+        booking.setStatus(BookingStatus.FAILED);
+
+        return new PaymentResponse(
+                booking.getBookingCode(),
+                booking.getStatus(),
+                booking.getTotalAmount(),
+                "Payment failed. The held seats have been released."
+        );
+    }
+
+    // Runs automatically every 10 seconds to release expired seat holds.
     @Scheduled(fixedDelay = 10000)
     @Transactional
     public void releaseExpiredBookingsAutomatically() {
-
-        // Find and process holds whose deadlines have passed.
         expireOldBookings(LocalDateTime.now());
     }
 
-    // Marks expired bookings and releases their seats.
-    // This method is shared by the booking request and scheduled task.
+    // Marks expired bookings and releases seats whose holds have expired.
     private void expireOldBookings(LocalDateTime now) {
 
-        // Find bookings that are still marked HELD but have passed their deadline.
         List<Booking> expiredBookings =
                 bookingRepository.findByStatusAndHoldExpiresAtLessThanEqual(
                         BookingStatus.HELD,
@@ -154,20 +242,18 @@ public class BookingService {
 
         for (Booking booking : expiredBookings) {
 
-            // Record that the customer did not complete payment in time.
+            // Mark the booking as expired because its payment deadline passed.
             booking.setStatus(BookingStatus.EXPIRED);
 
-            // Release seats only when they are still HELD and their deadline passed.
+            // Release only seats that are still held under an expired deadline.
             for (Seat seat : booking.getSeats()) {
-
                 if (seat.getStatus() == SeatStatus.HELD
                         && seat.getHoldExpiresAt() != null
-                        && !seat.getHoldExpiresAt().isAfter(now)) {
+                        && !seat.getHoldExpiresAt().isAfter(now)
+                        && seat.getHoldExpiresAt().equals(
+                                booking.getHoldExpiresAt())) {
 
-                    // Make the seat available for another customer.
                     seat.setStatus(SeatStatus.AVAILABLE);
-
-                    // Clear the old hold deadline.
                     seat.setHoldExpiresAt(null);
                 }
             }
