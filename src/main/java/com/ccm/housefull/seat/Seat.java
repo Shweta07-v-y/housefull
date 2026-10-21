@@ -3,7 +3,9 @@ package com.ccm.housefull.seat;
 
 import com.ccm.housefull.event.Event;
 import jakarta.persistence.*;
+
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(
@@ -36,16 +38,21 @@ public class Seat {
     @Column(nullable = false, length = 20)
     private SeatStatus status = SeatStatus.AVAILABLE;
 
+    @Column(name = "hold_expires_at")
+    private LocalDateTime holdExpiresAt;
+
     public Seat() {
     }
 
-    public Seat(Event event, String rowLabel, Integer seatNumber,
-                BigDecimal price) {
+    public Seat(
+            Event event,
+            String rowLabel,
+            Integer seatNumber,
+            BigDecimal price) {
         this.event = event;
         this.rowLabel = rowLabel;
         this.seatNumber = seatNumber;
         this.price = price;
-        this.status = SeatStatus.AVAILABLE;
     }
 
     public Long getId() {
@@ -72,6 +79,10 @@ public class Seat {
         return status;
     }
 
+    public LocalDateTime getHoldExpiresAt() {
+        return holdExpiresAt;
+    }
+
     public void setEvent(Event event) {
         this.event = event;
     }
@@ -90,5 +101,9 @@ public class Seat {
 
     public void setStatus(SeatStatus status) {
         this.status = status;
+    }
+
+    public void setHoldExpiresAt(LocalDateTime holdExpiresAt) {
+        this.holdExpiresAt = holdExpiresAt;
     }
 }
