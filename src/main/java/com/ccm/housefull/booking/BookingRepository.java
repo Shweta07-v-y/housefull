@@ -64,6 +64,7 @@
 
 
 
+
 package com.ccm.housefull.booking;
 
 import jakarta.persistence.LockModeType;
@@ -84,7 +85,6 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     Optional<Booking> findByBookingCode(String bookingCode);
 
     // Locks a booking row while payment or cancellation is processed.
-    // The lock is held until the surrounding transaction completes.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT b FROM Booking b WHERE b.bookingCode = :bookingCode")
     Optional<Booking> findByBookingCodeForUpdate(
@@ -95,8 +95,17 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
             BookingStatus status,
             LocalDateTime currentTime);
 
-    // Retrieves all bookings associated with a particular event.
+    // Retrieves all bookings for an event.
     @Query("SELECT b FROM Booking b WHERE b.event.id = :eventId")
     List<Booking> findAllByEventId(
+            @Param("eventId") Long eventId);
+
+    // Retrieves bookings for one event, newest first.
+    @Query("""
+           SELECT b FROM Booking b
+           WHERE b.event.id = :eventId
+           ORDER BY b.createdAt DESC
+           """)
+    List<Booking> findAllByEventIdOrderByCreatedAtDesc(
             @Param("eventId") Long eventId);
 }

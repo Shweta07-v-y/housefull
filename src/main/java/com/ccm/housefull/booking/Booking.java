@@ -16,21 +16,17 @@ import java.util.UUID;
 @Table(name = "bookings")
 public class Booking {
 
-    // Database-generated identifier for this booking.
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Unique reference that customers can use to look up their booking.
     @Column(name = "booking_code", nullable = false, unique = true, length = 36)
     private String bookingCode;
 
-    // Multiple bookings can belong to the same event.
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "event_id", nullable = false)
     private Event event;
 
-    // Associates this booking with the selected seats.
     @ManyToMany
     @JoinTable(
         name = "booking_seats",
@@ -39,28 +35,32 @@ public class Booking {
     )
     private Set<Seat> seats = new HashSet<>();
 
-    // Tracks the current state of this booking.
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private BookingStatus status = BookingStatus.HELD;
 
-    // Total calculated from the selected seats' database prices.
     @Column(name = "total_amount", nullable = false, precision = 10, scale = 2)
     private BigDecimal totalAmount;
 
-    // Deadline for completing payment.
     @Column(name = "hold_expires_at")
     private LocalDateTime holdExpiresAt;
 
-    // When this booking was created.
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
-    // Required by JPA when loading a booking from the database.
+    // Tracks whether staff have validated this ticket.
+    @Column(name = "checked_in", nullable = false, columnDefinition = "boolean default false")
+    private boolean checkedIn = false;
+
+    // Time when staff validated the ticket.
+    @Column(name = "checked_in_at")
+    private LocalDateTime checkedInAt;
+
+    // Required by JPA.
     public Booking() {
     }
 
-    // Creates a new temporary booking with its initial details.
+    // Creates a new booking with a unique reference code.
     public Booking(
             Event event,
             Set<Seat> seats,
@@ -74,9 +74,10 @@ public class Booking {
         this.holdExpiresAt = holdExpiresAt;
         this.createdAt = LocalDateTime.now();
         this.status = BookingStatus.HELD;
+        this.checkedIn = false;
+        this.checkedInAt = null;
     }
 
-    // Getters allow other application classes to read booking details.
     public Long getId() {
         return id;
     }
@@ -109,13 +110,25 @@ public class Booking {
         return createdAt;
     }
 
-    // Updates the booking state after payment, cancellation, or expiry.
+    public boolean isCheckedIn() {
+        return checkedIn;
+    }
+
+    public LocalDateTime getCheckedInAt() {
+        return checkedInAt;
+    }
+
     public void setStatus(BookingStatus status) {
         this.status = status;
     }
 
-    // Allows the hold deadline to be updated when needed.
     public void setHoldExpiresAt(LocalDateTime holdExpiresAt) {
         this.holdExpiresAt = holdExpiresAt;
+    }
+
+    // Records the successful check-in.
+    public void markCheckedIn(LocalDateTime checkedInAt) {
+        this.checkedIn = true;
+        this.checkedInAt = checkedInAt;
     }
 }
