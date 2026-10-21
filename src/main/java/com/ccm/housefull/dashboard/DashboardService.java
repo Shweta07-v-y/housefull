@@ -10,15 +10,15 @@ import com.ccm.housefull.seat.Seat;
 import com.ccm.housefull.seat.SeatRepository;
 import com.ccm.housefull.seat.SeatStatus;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.http.HttpStatus;
 
 import java.math.BigDecimal;
 import java.util.List;
 
-// Calculates dashboard statistics for an event.
+// Contains the business logic for calculating dashboard statistics.
 @Service
 public class DashboardService {
 
@@ -26,6 +26,7 @@ public class DashboardService {
     private final SeatRepository seatRepository;
     private final BookingRepository bookingRepository;
 
+    // Spring injects these repositories when creating the service.
     public DashboardService(
             EventRepository eventRepository,
             SeatRepository seatRepository,
@@ -36,26 +37,26 @@ public class DashboardService {
         this.bookingRepository = bookingRepository;
     }
 
-    // Read-only because this method only retrieves and calculates statistics.
+    // This method only reads data, so we mark the transaction read-only.
     @Transactional(readOnly = true)
     public DashboardResponse getEventDashboard(Long eventId) {
 
-        // Check that the event exists before calculating its statistics.
+        // Step 1: Find the event or return HTTP 404 if it does not exist.
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Event not found"));
 
-        // Retrieve all seats belonging to the event.
+        // Step 2: Retrieve all seats belonging to this event.
         List<Seat> seats =
                 seatRepository.findByEventIdOrderByRowLabelAscSeatNumberAsc(
                         eventId);
 
-        // Retrieve all bookings for the event.
+        // Step 3: Retrieve all bookings belonging to this event.
         List<Booking> bookings =
                 bookingRepository.findAllByEventId(eventId);
 
-        // Count seats by their current status.
+        // Step 4: Count seats according to their current database status.
         long seatsSold = seats.stream()
                 .filter(seat -> seat.getStatus() == SeatStatus.BOOKED)
                 .count();
@@ -68,31 +69,44 @@ public class DashboardService {
                 .filter(seat -> seat.getStatus() == SeatStatus.AVAILABLE)
                 .count();
 
-        // Count bookings by their status.
-        long confirmedBookings = countBookings(
-                bookings, BookingStatus.CONFIRMED);
+        // Step 5: Count bookings according to their status.
+        long confirmedBookings =
+                countBookings(bookings, BookingStatus.CONFIRMED);
 
-        long failedBookings = countBookings(
-                bookings, BookingStatus.FAILED);
+        long failedBookings =
+                countBookings(bookings, BookingStatus.FAILED);
 
-        long cancelledBookings = countBookings(
-                bookings, BookingStatus.CANCELLED);
+        long cancelledBookings =
+                countBookings(bookings, BookingStatus.CANCELLED);
 
-        long expiredBookings = countBookings(
-                bookings, BookingStatus.EXPIRED);
+        long expiredBookings =
+                countBookings(bookings, BookingStatus.EXPIRED);
 
-        long pendingBookings = countBookings(
-                bookings, BookingStatus.HELD);
+        long pendingBookings =
+                countBookings(bookings, BookingStatus.HELD);
 
-        // Add amounts only for confirmed bookings.
-        // Failed, held, expired and cancelled bookings are excluded.
+        // Step 6: Count confirmed tickets that have been checked in.
+        // Only confirmed bookings count as valid tickets for entry.
+        long checkedInCount = bookings.stream()
+                .filter(booking ->
+                        booking.getStatus() == BookingStatus.CONFIRMED
+                                && booking.isCheckedIn())
+                .count();
+
+        // Step 7: Count confirmed bookings whose tickets have not
+        // yet been checked in.
+        long notCheckedInCount =
+                confirmedBookings - checkedInCount;
+
+        // Step 8: Calculate revenue from currently confirmed bookings.
+        // Cancelled bookings are excluded from this figure.
         BigDecimal revenueCollected = bookings.stream()
                 .filter(booking ->
                         booking.getStatus() == BookingStatus.CONFIRMED)
                 .map(Booking::getTotalAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Return all statistics in one response object.
+        // Step 9: Return all calculated values as a single response.
         return new DashboardResponse(
                 event.getId(),
                 event.getName(),
@@ -106,11 +120,13 @@ public class DashboardService {
                 cancelledBookings,
                 expiredBookings,
                 pendingBookings,
+                checkedInCount,
+                notCheckedInCount,
                 revenueCollected
         );
     }
 
-    // Reusable helper for counting bookings with a specific status.
+    // Reusable helper: counts bookings that match a particular status.
     private long countBookings(
             List<Booking> bookings,
             BookingStatus status) {

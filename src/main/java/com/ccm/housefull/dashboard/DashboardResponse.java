@@ -3,19 +3,19 @@ package com.ccm.housefull.dashboard;
 
 import java.math.BigDecimal;
 
-// Defines the summary data returned to the organiser dashboard.
+// Defines the statistics returned to the event organiser.
 public class DashboardResponse {
 
     private Long eventId;
     private String eventName;
 
-    // Seat availability counts.
+    // Seat availability statistics.
     private long totalSeats;
     private long seatsSold;
     private long seatsHeld;
     private long seatsAvailable;
 
-    // Booking counts.
+    // Booking statistics.
     private long totalBookings;
     private long confirmedBookings;
     private long failedBookings;
@@ -23,9 +23,14 @@ public class DashboardResponse {
     private long expiredBookings;
     private long pendingBookings;
 
-    // Money from confirmed bookings in this simulated payment system.
+    // Ticket entry statistics.
+    private long checkedInCount;
+    private long notCheckedInCount;
+
+    // Revenue from bookings that are currently confirmed.
     private BigDecimal revenueCollected;
 
+    // Constructor: receives the calculated statistics from DashboardService.
     public DashboardResponse(
             Long eventId,
             String eventName,
@@ -39,6 +44,8 @@ public class DashboardResponse {
             long cancelledBookings,
             long expiredBookings,
             long pendingBookings,
+            long checkedInCount,
+            long notCheckedInCount,
             BigDecimal revenueCollected) {
 
         this.eventId = eventId;
@@ -53,6 +60,8 @@ public class DashboardResponse {
         this.cancelledBookings = cancelledBookings;
         this.expiredBookings = expiredBookings;
         this.pendingBookings = pendingBookings;
+        this.checkedInCount = checkedInCount;
+        this.notCheckedInCount = notCheckedInCount;
         this.revenueCollected = revenueCollected;
     }
 
@@ -102,6 +111,14 @@ public class DashboardResponse {
 
     public long getPendingBookings() {
         return pendingBookings;
+    }
+
+    public long getCheckedInCount() {
+        return checkedInCount;
+    }
+
+    public long getNotCheckedInCount() {
+        return notCheckedInCount;
     }
 
     public BigDecimal getRevenueCollected() {
