@@ -938,3 +938,154 @@ button:disabled {
     text-align: center;
   }
 }
+
+/* Navigation buttons */
+.nav-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Organiser dashboard statistics */
+.dashboard-label {
+  display: block;
+  margin: 12px 0 8px;
+  color: #514b64;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.dashboard-select,
+.dashboard-input {
+  width: 100%;
+  max-width: 420px;
+  padding: 12px 14px;
+  border: 1px solid #e1dbea;
+  border-radius: 10px;
+  background: #fff;
+  color: #29233d;
+}
+
+.dashboard-select:focus,
+.dashboard-input:focus {
+  outline: 2px solid #c9b8ff;
+  border-color: #7454df;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 28px;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 22px;
+  border: 1px solid #eeeaf4;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.stat-card span {
+  color: #777381;
+  font-size: 12px;
+}
+
+.stat-card strong {
+  color: #6846d5;
+  font-size: 25px;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-subtitle {
+  margin: 35px 0 16px;
+  font-size: 22px;
+}
+
+.booking-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #eeeaf4;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.booking-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.booking-table th,
+.booking-table td {
+  padding: 14px;
+  border-bottom: 1px solid #eeeaf4;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.booking-table th {
+  background: #f4f0ff;
+  color: #514078;
+}
+
+.booking-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.staff-panel {
+  max-width: 620px;
+  margin: 25px 0;
+}
+
+.checkin-result {
+  margin-top: 24px;
+  padding: 18px;
+  border: 1px solid #c4e7ce;
+  border-radius: 12px;
+  background: #effaf2;
+  overflow-wrap: anywhere;
+}
+
+.checkin-result h2 {
+  color: #27673a;
+  font-size: 18px;
+}
+
+.checkin-result p {
+  color: #3f5f48;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Make dashboard cards fit smaller screens. */
+@media (max-width: 900px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .navbar {
+    flex-wrap: wrap;
+  }
+
+  .nav-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .booking-table th,
+  .booking-table td {
+    min-width: 120px;
+  }
+}

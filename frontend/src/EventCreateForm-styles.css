@@ -1,0 +1,70 @@
+/* Event creation form additions */
+.event-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.event-rows-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.event-rows-heading h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+
+.event-row-editor {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  align-items: end;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e9e3f4;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.event-row-editor > div {
+  min-width: 0;
+}
+
+.event-create-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 8px 0;
+  padding: 16px;
+  border-radius: 10px;
+  background: #f5f0ff;
+}
+
+.event-create-summary strong {
+  font-size: 22px;
+  color: #7047eb;
+}
+
+.remove-row-button {
+  margin-bottom: 2px;
+}
+
+@media (max-width: 700px) {
+  .event-row-editor {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .event-rows-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .remove-row-button {
+    width: 100%;
+  }
+}
