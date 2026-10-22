@@ -396,7 +396,6 @@
 
 
 
-
 package com.ccm.housefull.booking;
 
 import com.ccm.housefull.event.Event;
@@ -424,10 +423,8 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -456,7 +453,6 @@ class BookingServiceTest {
     void shouldRejectSeatThatIsAlreadyHeld() {
 
         Event event = createEvent();
-
         Seat seat = createSeat(event, SeatStatus.HELD);
 
         when(eventRepository.findById(100L))
@@ -518,7 +514,6 @@ class BookingServiceTest {
 
         assertEquals(BookingStatus.CONFIRMED, booking.getStatus());
         assertEquals(SeatStatus.BOOKED, seat.getStatus());
-
         assertEquals(BookingStatus.CONFIRMED, response.getStatus());
         assertEquals(
                 new BigDecimal("500.00"),
@@ -537,7 +532,6 @@ class BookingServiceTest {
     void shouldExpireBookingAndReleaseSeatsWhenHoldDeadlineHasPassed() {
 
         Event event = createEvent();
-
         LocalDateTime expiredTime = LocalDateTime.now().minusMinutes(6);
 
         Seat seat = createSeat(event, SeatStatus.HELD);
@@ -596,12 +590,10 @@ class BookingServiceTest {
         assertEquals(BookingStatus.CANCELLED, booking.getStatus());
         assertEquals(SeatStatus.AVAILABLE, seat.getStatus());
         assertEquals(null, seat.getHoldExpiresAt());
-
         assertEquals(
                 new BigDecimal("500.00"),
                 response.getTotalAmount()
         );
-
         assertEquals(
                 new BigDecimal("500.00"),
                 response.getRefundAmount()
@@ -641,8 +633,6 @@ class BookingServiceTest {
         );
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
-
-        // The booking and seat must remain unchanged.
         assertEquals(BookingStatus.CONFIRMED, booking.getStatus());
         assertEquals(SeatStatus.BOOKED, seat.getStatus());
 
@@ -685,7 +675,75 @@ class BookingServiceTest {
     }
 
     // ---------------------------------------------------------
-    // HELPER METHODS: Shared test objects
+    // TEST 7: Allow check-in for a confirmed booking
+    // ---------------------------------------------------------
+
+    @Test
+    void shouldAllowCheckInForConfirmedBooking() {
+
+        Event event = createEvent();
+        Seat seat = createSeat(event, SeatStatus.BOOKED);
+
+        Booking booking = new Booking(
+                event,
+                new HashSet<>(List.of(seat)),
+                new BigDecimal("500.00"),
+                null
+        );
+
+        booking.setStatus(BookingStatus.CONFIRMED);
+
+        when(bookingRepository.findByBookingCodeForUpdate(
+                booking.getBookingCode()))
+                .thenReturn(Optional.of(booking));
+
+        CheckInResponse response =
+                bookingService.checkInBooking(booking.getBookingCode());
+
+        assertEquals(true, booking.isCheckedIn());
+        assertEquals(true, response.isCheckedIn());
+        assertEquals(BookingStatus.CONFIRMED, booking.getStatus());
+
+        verify(bookingRepository).save(booking);
+    }
+
+    // ---------------------------------------------------------
+    // TEST 8: Reject duplicate check-in
+    // ---------------------------------------------------------
+
+    @Test
+    void shouldRejectCheckInWhenTicketWasAlreadyUsed() {
+
+        Event event = createEvent();
+        Seat seat = createSeat(event, SeatStatus.BOOKED);
+
+        Booking booking = new Booking(
+                event,
+                new HashSet<>(List.of(seat)),
+                new BigDecimal("500.00"),
+                null
+        );
+
+        booking.setStatus(BookingStatus.CONFIRMED);
+        booking.markCheckedIn(LocalDateTime.now().minusMinutes(2));
+
+        when(bookingRepository.findByBookingCodeForUpdate(
+                booking.getBookingCode()))
+                .thenReturn(Optional.of(booking));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> bookingService.checkInBooking(booking.getBookingCode())
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals(true, booking.isCheckedIn());
+
+        verify(bookingRepository, never()).save(any());
+    }
+
+    // ---------------------------------------------------------
+    // HELPER METHODS
     // ---------------------------------------------------------
 
     private Event createEvent() {
