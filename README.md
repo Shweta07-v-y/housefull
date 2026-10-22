@@ -1,5 +1,4 @@
-Housefull — Seat Booking System
-
+# Housefull — Seat Booking System
 A full-stack event seat-booking application built with Spring Boot, Java, MySQL, and React with Vite.
 
 Features
