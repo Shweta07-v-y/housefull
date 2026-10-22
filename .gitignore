@@ -50,3 +50,7 @@ housefull-before-history-cleanup/
 
 # Old Git history - never upload
 .git-old-history/
+
+# JMeter test artifacts
+View Results Tree.jmx
+jmeter.log
